@@ -1,54 +1,36 @@
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: Apache-2.0
+from __future__ import print_function
 
-"""
-Purpose
+import boto3
+import json
 
-Shows how to implement an AWS Lambda function that handles input from direct
-invocation.
-"""
-
-import logging
-import os
+print('Loading function')
 
 
-logger = logging.getLogger()
+def handler(event, context):
+    '''Provide an event that contains the following keys:
 
-# Define a list of Python lambda functions that are called by this AWS Lambda function.
-ACTIONS = {
-    'plus': lambda x, y: x + y,
-    'minus': lambda x, y: x - y,
-    'times': lambda x, y: x * y,
-    'divided-by': lambda x, y: x / y}
+      - operation: one of the operations in the operations dict below
+      - tableName: required for operations that interact with DynamoDB
+      - payload: a parameter to pass to the operation being performed
+    '''
+    #print("Received event: " + json.dumps(event, indent=2))
 
+    operation = event['operation']
 
-def lambda_handler(event, context):
-    """
-    Accepts an action and two numbers, performs the specified action on the numbers,
-    and returns the result.
+    if 'tableName' in event:
+        dynamo = boto3.resource('dynamodb').Table(event['tableName'])
 
-    :param event: The event dict that contains the parameters sent when the function
-                  is invoked.
-    :param context: The context in which the function is called.
-    :return: The result of the specified action.
-    """
-    # Set the log level based on a variable configured in the Lambda environment.
-    logger.setLevel(os.environ.get('LOG_LEVEL', logging.INFO))
-    logger.debug('Event: %s', event)
+    operations = {
+        'create': lambda x: dynamo.put_item(**x),
+        'read': lambda x: dynamo.get_item(**x),
+        'update': lambda x: dynamo.update_item(**x),
+        'delete': lambda x: dynamo.delete_item(**x),
+        'list': lambda x: dynamo.scan(**x),
+        'echo': lambda x: x,
+        'ping': lambda x: 'pong'
+    }
 
-    action = event.get('action')
-    func = ACTIONS.get(action)
-    x = event.get('x')
-    y = event.get('y')
-    result = None
-    try:
-        if func is not None and x is not None and y is not None:
-            result = func(x, y)
-            logger.info("%s %s %s is %s", x, action, y, result)
-        else:
-            logger.error("I can't calculate %s %s %s.", x, action, y)
-    except ZeroDivisionError:
-        logger.warning("I can't divide %s by 0!", x)
-
-    response = {'result': result}
-    return response
+    if operation in operations:
+        return operations[operation](event.get('payload'))
+    else:
+        raise ValueError('Unrecognized operation "{}"'.format(operation))
