@@ -7,6 +7,6 @@ print('Loading function')
 
 def lambda_handler(event, context):
     return {
-        "status": 200,
-        "event": event
+        "statusCode": 200,
+        "body": event
     }
